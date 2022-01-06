@@ -130,3 +130,6 @@ dmypy.json
 
 # Intelij
 .idea/
+
+# internal trash
+calibration.json
