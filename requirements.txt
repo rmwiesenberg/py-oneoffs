@@ -1,0 +1,4 @@
+pytorch
+Pillow
+pyautogui
+pynput
