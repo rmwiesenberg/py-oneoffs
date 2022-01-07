@@ -152,16 +152,19 @@ def test(*, name: str):
     test_screen.init()
 
     with torch.set_grad_enabled(False):
-        for _ in range(15):
+        while 1:
+            val = input('Press enter to read the caterpillar. (q to quit)').lower()
+            if val == 'q':
+                break
             caterpillar = test_screen.test_caterpillar()
             res = net(torch.from_numpy(np.array(caterpillar.json())).float())
             bool_res = bool(pred(res))
             if bool_res:
                 print(f'{caterpillar} is Valid')
-                test_screen.valid.click()
+                # test_screen.valid.click()
             else:
                 print(f'{caterpillar} is Invalid')
-                test_screen.invalid.click()
+                # test_screen.invalid.click()
             time.sleep(1)
 
 
