@@ -1,4 +1,7 @@
+pandas
 pytorch
 Pillow
 pyautogui
 pynput
+tqdm
+sklearn

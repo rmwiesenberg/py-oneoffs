@@ -1,0 +1,159 @@
+import argparse
+import json
+import logging
+import os
+import random
+from typing import List, Tuple
+
+import numpy as np
+import torch
+import torch.nn as nn
+from torch.optim import Adam
+from torch.utils.data import DataLoader
+
+from common import DATA_DIR, Caterpillar, Color
+
+EPOCHS = 50
+BATCH_SIZE = 32
+
+
+class Dataset(torch.utils.data.Dataset):
+    def __init__(self, data: List[Tuple[tuple, bool]]):
+        self.data = data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index: int):
+        row = self.data[index]
+        return np.array(row[0]), float(row[1])
+
+
+class NN(nn.Module):
+    def __init__(self):
+        super(NN, self).__init__()
+
+        self.layer_1 = nn.Linear(7, 32)
+        self.layer_2 = nn.Linear(32, 32)
+        self.layer_3 = nn.Linear(32, 64)
+        self.layer_4 = nn.Linear(64, 64)
+        self.layer_out = nn.Linear(64, 1)
+
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(p=0.1)
+        self.batchnorm1 = nn.BatchNorm1d(32)
+        self.batchnorm2 = nn.BatchNorm1d(32)
+        self.batchnorm3 = nn.BatchNorm1d(64)
+        self.batchnorm4 = nn.BatchNorm1d(64)
+
+    def forward(self, inputs):
+        x = self.relu(self.layer_1(inputs))
+        x = self.batchnorm1(x)
+        x = self.relu(self.layer_2(x))
+        x = self.batchnorm2(x)
+        x = self.dropout(x)
+        x = self.relu(self.layer_3(x))
+        x = self.batchnorm3(x)
+        x = self.relu(self.layer_4(x))
+        x = self.batchnorm4(x)
+        x = self.dropout(x)
+        x = self.layer_out(x)
+
+        return x
+
+
+def binary_acc(y_pred, y_test):
+    y_pred_tag = torch.round(torch.sigmoid(y_pred))
+
+    correct_results_sum = (y_pred_tag == y_test).sum().float()
+    acc = correct_results_sum / y_test.shape[0]
+    acc = torch.round(acc * 100)
+
+    return acc
+
+
+def train(*, name: str, validation: float = 0.1):
+    data_file = os.path.join(DATA_DIR, f'{name}.json')
+    with open(data_file, 'r') as f:
+        data = json.load(f)
+
+    train_data = []
+    valid_data = []
+    for idx, d in enumerate(data):
+        cat_info, value = d
+        caterpillar = Caterpillar(tuple([Color(c) for c in cat_info]))
+        if random.random() < validation:
+            valid_data.append(d)
+            if len(caterpillar) <= 2:
+                train_data.append(d)
+        else:
+            train_data.append(d)
+
+    training_data = Dataset(train_data)
+    train_loader = DataLoader(dataset=training_data, batch_size=BATCH_SIZE, shuffle=True)
+    validation_data = Dataset(valid_data)
+    valid_loader = DataLoader(dataset=validation_data, batch_size=BATCH_SIZE, shuffle=True)
+
+    logging.info(f'Using {len(training_data)} sets for training and {len(validation_data)} for validation.')
+
+    net = NN()
+    print(net)
+
+    use_cuda = torch.cuda.is_available()
+    device = torch.device("cuda:0" if use_cuda else "cpu")
+    net.to(device)
+
+    criterion = nn.BCEWithLogitsLoss()
+    optimizer = Adam(net.parameters(), lr=0.001)
+    for epoch in range(EPOCHS):
+        epoch_loss = 0
+        epoch_acc = 0
+        for x_train, y_train in train_loader:
+            x_train, y_train = x_train.to(device), y_train.to(device)
+            optimizer.zero_grad()
+
+            y_pred = net(x_train.float())
+
+            loss = criterion(y_pred, y_train.unsqueeze(1))
+            acc = binary_acc(y_pred, y_train.unsqueeze(1))
+
+            loss.backward()
+            optimizer.step()
+
+            epoch_loss += loss.item()
+            epoch_acc += acc.item()
+
+        print(f'Epoch {epoch + 0:03}: '
+              f'| Loss: {epoch_loss / len(train_loader):.5f} '
+              f'| Acc: {epoch_acc / len(train_loader):.3f}')
+
+    final_acc = 0
+    with torch.set_grad_enabled(False):
+        for x_valid, y_valid in valid_loader:
+            x_valid, y_valid = x_valid.to(device), y_valid.to(device)
+            y_pred = net(x_valid.float())
+            acc = binary_acc(y_pred, y_valid.unsqueeze(1))
+            final_acc += acc.item()
+        print(f'Validation Acc: {final_acc / len(valid_loader):.3f}')
+    torch.save(net.state_dict(), os.path.join(DATA_DIR, f'{name}.torch'))
+
+
+def test(*, name: str):
+    net = NN()
+    net.load_state_dict(torch.load(os.path.join(DATA_DIR, f'{name}.torch')))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('mode', choices=['train', 'test'])
+    parser.add_argument('--name', required=True)
+    args = parser.parse_args()
+
+    if args.mode == 'train':
+        train(name=args.name)
+    else:
+        test(name=args.name)
+
+
+if __name__ == '__main__':
+    main()
