@@ -132,4 +132,4 @@ dmypy.json
 .idea/
 
 # internal trash
-caterpillar-logic/calibration.json
+*.screen.json

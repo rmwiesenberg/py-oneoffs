@@ -4,14 +4,15 @@ import math
 import os
 import time
 from enum import Enum
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from PIL import ImageGrab
 from pynput import mouse
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 DATA_DIR = os.path.join(THIS_DIR, 'data')
-CALIBRATION_FILE = os.path.join(THIS_DIR, 'calibration.json')
+INPUT_SCREEN_FILE = os.path.join(THIS_DIR, 'input.screen.json')
+TEST_SCREEN_FILE = os.path.join(THIS_DIR, 'test.screen.json')
 
 MAX_CATERPILLAR_SIZE = 7
 DEFAULT_CATERPILLAR_SIZE = 6
@@ -71,6 +72,21 @@ class ScreenLoc:
             raise TypeError()
         return ScreenLoc((other.xy[0] + self.xy[0], other.xy[1] + self.xy[1]))
 
+    @staticmethod
+    def wait_for_click() -> 'ScreenLoc':
+        last_pressed: Tuple[int, int] = (-1, -1)
+
+        def on_click(x, y, button, pressed):
+            nonlocal last_pressed
+            if pressed:
+                last_pressed = (x, y)
+                logging.debug(f'{last_pressed}: {ImageGrab.grab().getpixel(last_pressed)}')
+                return False
+
+        with mouse.Listener(on_click=on_click) as listener:
+            listener.join()
+        return ScreenLoc(last_pressed)
+
     def click(self):
         controller.position = self.xy
         controller.press(mouse.Button.left)
@@ -91,7 +107,7 @@ class ScreenLoc:
         return min(color_lookup.items(), key=lambda x: dist(x[0], raw))[1]
 
 
-class GameScreen:
+class InputScreen:
     def __init__(self):
         self.level: ScreenLoc = None
         self.back: ScreenLoc = None
@@ -108,21 +124,6 @@ class GameScreen:
         self.valid_loc: List[ScreenLoc] = []
         self.invalid_loc: List[ScreenLoc] = []
         self.cat_offsets: List[ScreenLoc] = []
-
-    @staticmethod
-    def wait_for_click() -> ScreenLoc:
-        last_pressed: Tuple[int, int] = (-1, -1)
-
-        def on_click(x, y, button, pressed):
-            nonlocal last_pressed
-            if pressed:
-                last_pressed = (x, y)
-                logging.debug(f'{last_pressed}: {ImageGrab.grab().getpixel(last_pressed)}')
-                return False
-
-        with mouse.Listener(on_click=on_click) as listener:
-            listener.join()
-        return ScreenLoc(last_pressed)
 
     def open_level(self):
         while self.valid_caterpillar() == self.invalid_caterpillar():
@@ -152,9 +153,9 @@ class GameScreen:
 
     def _set_meta_buttons(self):
         print('Click on the back button')
-        self.back = self.wait_for_click()
+        self.back = ScreenLoc.wait_for_click()
         print('Click on the level')
-        self.level = self.wait_for_click()
+        self.level = ScreenLoc.wait_for_click()
 
     def _set_color_lookup(self):
         self.color_lookup = {
@@ -168,12 +169,12 @@ class GameScreen:
 
     def _set_input_loc(self):
         print('Click on the input buttons, left-to-right, one at a time')
-        self.red = self.wait_for_click()
-        self.green = self.wait_for_click()
-        self.blue = self.wait_for_click()
-        self.grey = self.wait_for_click()
-        self.delete = self.wait_for_click()
-        self.ok = self.wait_for_click()
+        self.red = ScreenLoc.wait_for_click()
+        self.green = ScreenLoc.wait_for_click()
+        self.blue = ScreenLoc.wait_for_click()
+        self.grey = ScreenLoc.wait_for_click()
+        self.delete = ScreenLoc.wait_for_click()
+        self.ok = ScreenLoc.wait_for_click()
 
         self.clear()
 
@@ -194,10 +195,10 @@ class GameScreen:
     def _set_caterpillar_offsets(self):
         print('Click on the first segment of each valid caterpillar (7 total clicks).')
         self.cat_offsets = []
-        first_y = self.wait_for_click().xy[1]
+        first_y = ScreenLoc.wait_for_click().xy[1]
         self.cat_offsets.append(ScreenLoc((0, 0)))
         for _ in range(NUM_DEFAULT_CATERPILLARS - 1):
-            screen_loc = self.wait_for_click()
+            screen_loc = ScreenLoc.wait_for_click()
             # only use the y component
             self.cat_offsets.append(ScreenLoc((0, screen_loc.xy[1] - first_y)))
 
@@ -215,7 +216,7 @@ class GameScreen:
         print('Click one each segment of the first valid caterpillar, left-to-right, one at a time (7 total clicks).')
         self.valid_loc = []
         for _ in range(MAX_CATERPILLAR_SIZE):
-            self.valid_loc.append(self.wait_for_click())
+            self.valid_loc.append(ScreenLoc.wait_for_click())
         self._confirm_valid_loc()
 
     def _confirm_invalid_loc(self):
@@ -231,7 +232,7 @@ class GameScreen:
         print('Click one each segment of the first invalid caterpillar, left-to-right, one at a time (7 total clicks).')
         self.invalid_loc = []
         for _ in range(MAX_CATERPILLAR_SIZE):
-            self.invalid_loc.append(self.wait_for_click())
+            self.invalid_loc.append(ScreenLoc.wait_for_click())
         self._confirm_invalid_loc()
 
     def init(self):
@@ -244,10 +245,10 @@ class GameScreen:
         self._set_meta_buttons()
 
     def load(self) -> bool:
-        if not os.path.exists(CALIBRATION_FILE):
+        if not os.path.exists(INPUT_SCREEN_FILE):
             return False
 
-        with open(CALIBRATION_FILE, 'r') as f:
+        with open(INPUT_SCREEN_FILE, 'r') as f:
             settings = json.load(f)
             if 'red' not in settings:
                 return False
@@ -287,7 +288,7 @@ class GameScreen:
         return True
 
     def dump(self):
-        with open(CALIBRATION_FILE, 'w') as f:
+        with open(INPUT_SCREEN_FILE, 'w') as f:
             json.dump({
                 'red': self.red.xy,
                 'green': self.green.xy,
@@ -323,3 +324,50 @@ class GameScreen:
                 return False
             time.sleep(0.01)
         raise AssertionError(f'Could not find {caterpillar}')
+
+
+class TestScreen:
+    def __init__(self, input_screen: Optional[InputScreen] = None):
+        if not input_screen:
+            input_screen = InputScreen()
+        input_screen.init()
+        self.color_lookup = input_screen.color_lookup
+
+        self.valid: ScreenLoc = None
+        self.invalid: ScreenLoc = None
+        self.caterpillar: List[ScreenLoc] = []
+
+    def test_caterpillar(self) -> Caterpillar:
+        colors = [loc.get_color(self.color_lookup) for loc in self.caterpillar]
+        caterpillar = Caterpillar(tuple(colors))
+        return caterpillar
+
+    def _confirm_test_loc(self):
+        logging.info('Please wait while reading the caterpillars from the screen...')
+        caterpillar = self.test_caterpillar()
+        if input(f'Confirm the colors of the test caterpillar: {caterpillar}[y/n]').lower() != 'y':
+            self._set_test_screen()
+
+    def _set_test_screen(self):
+        print('Click on the center of the ready for test button')
+        ready = ScreenLoc.wait_for_click()
+        print('Click one each segment of the test caterpillar, left-to-right, one at a time (7 total clicks).')
+        self.caterpillar = []
+        for _ in range(MAX_CATERPILLAR_SIZE):
+            self.caterpillar.append(ScreenLoc.wait_for_click())
+        self._confirm_test_loc()
+
+        self.valid = ScreenLoc((self.caterpillar[0].xy[0], ready.xy[1]))
+        self.invalid = ScreenLoc((self.caterpillar[-1].xy[0], ready.xy[1]))
+
+    def init(self):
+        self._set_test_screen()
+        self.dump()
+
+    def dump(self):
+        with open(TEST_SCREEN_FILE, 'w') as f:
+            json.dump({
+                'caterpillar': [v.xy for v in self.caterpillar],
+                'valid': self.valid.xy,
+                'invalid': self.invalid.xy
+            }, f)

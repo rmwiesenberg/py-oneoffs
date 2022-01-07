@@ -8,7 +8,7 @@ from typing import Dict, List
 
 from pynput import mouse
 
-from common import GameScreen, Caterpillar, MAX_CATERPILLAR_SIZE, Color, DATA_DIR, NUM_DEFAULT_CATERPILLARS
+from common import InputScreen, Caterpillar, MAX_CATERPILLAR_SIZE, Color, DATA_DIR, NUM_DEFAULT_CATERPILLARS
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 REFRESH_SPACE = 5460
@@ -29,7 +29,7 @@ def gen_space() -> Dict[int, List[Caterpillar]]:
 
 
 def curate_randomly(*, name: str, thresh: float = DEFAULT_THRESH, min_caterpillars: int = 2):
-    game_screen = GameScreen()
+    game_screen = InputScreen()
     game_screen.init()
 
     data_space = gen_space()
@@ -61,7 +61,7 @@ def curate_randomly(*, name: str, thresh: float = DEFAULT_THRESH, min_caterpilla
 
 
 def curate_refresh(*, name: str, thresh: float = DEFAULT_THRESH):
-    game_screen = GameScreen()
+    game_screen = InputScreen()
     game_screen.init()
 
     goal = int(REFRESH_SPACE * thresh)

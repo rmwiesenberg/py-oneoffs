@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import random
+import time
 from typing import List, Tuple
 
 import numpy as np
@@ -11,10 +12,11 @@ import torch.nn as nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
-from common import DATA_DIR, Caterpillar, Color
+from common import DATA_DIR, Caterpillar, Color, TestScreen
 
 EPOCHS = 50
 BATCH_SIZE = 32
+LEARN_RATE = 0.005
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -36,8 +38,8 @@ class NN(nn.Module):
         self.layer_1 = nn.Linear(7, 32)
         self.layer_2 = nn.Linear(32, 32)
         self.layer_3 = nn.Linear(32, 64)
-        self.layer_4 = nn.Linear(64, 64)
-        self.layer_out = nn.Linear(64, 1)
+        self.layer_4 = nn.Linear(64, 16)
+        self.layer_out = nn.Linear(16, 1)
 
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(p=0.1)
@@ -48,22 +50,26 @@ class NN(nn.Module):
 
     def forward(self, inputs):
         x = self.relu(self.layer_1(inputs))
-        x = self.batchnorm1(x)
+        # x = self.batchnorm1(x)
         x = self.relu(self.layer_2(x))
-        x = self.batchnorm2(x)
-        x = self.dropout(x)
+        # x = self.batchnorm2(x)
+        # x = self.dropout(x)
         x = self.relu(self.layer_3(x))
-        x = self.batchnorm3(x)
+        # x = self.batchnorm3(x)
         x = self.relu(self.layer_4(x))
-        x = self.batchnorm4(x)
-        x = self.dropout(x)
+        # x = self.batchnorm4(x)
+        # x = self.dropout(x)
         x = self.layer_out(x)
 
         return x
 
 
+def pred(y):
+    return torch.round(torch.sigmoid(y))
+
+
 def binary_acc(y_pred, y_test):
-    y_pred_tag = torch.round(torch.sigmoid(y_pred))
+    y_pred_tag = pred(y_pred)
 
     correct_results_sum = (y_pred_tag == y_test).sum().float()
     acc = correct_results_sum / y_test.shape[0]
@@ -104,7 +110,7 @@ def train(*, name: str, validation: float = 0.1):
     net.to(device)
 
     criterion = nn.BCEWithLogitsLoss()
-    optimizer = Adam(net.parameters(), lr=0.001)
+    optimizer = Adam(net.parameters(), lr=LEARN_RATE)
     for epoch in range(EPOCHS):
         epoch_loss = 0
         epoch_acc = 0
@@ -141,6 +147,22 @@ def train(*, name: str, validation: float = 0.1):
 def test(*, name: str):
     net = NN()
     net.load_state_dict(torch.load(os.path.join(DATA_DIR, f'{name}.torch')))
+
+    test_screen = TestScreen()
+    test_screen.init()
+
+    with torch.set_grad_enabled(False):
+        for _ in range(15):
+            caterpillar = test_screen.test_caterpillar()
+            res = net(torch.from_numpy(np.array(caterpillar.json())).float())
+            bool_res = bool(pred(res))
+            if bool_res:
+                print(f'{caterpillar} is Valid')
+                test_screen.valid.click()
+            else:
+                print(f'{caterpillar} is Invalid')
+                test_screen.invalid.click()
+            time.sleep(1)
 
 
 def main():
