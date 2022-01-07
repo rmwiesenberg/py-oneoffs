@@ -23,11 +23,16 @@ class Color(Enum):
     Blue = 3
     Grey = 4
 
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return str(self)
+
 
 class Caterpillar:
     def __init__(self, combo: List[Color]):
         assert len(combo) == MAX_INPUT, combo
-        assert combo[0] != Color.Null, combo
 
         null_started = False
         for color in combo:
@@ -37,6 +42,12 @@ class Caterpillar:
                 raise AssertionError('Poorly constructed caterpillar', combo)
 
         self.combo = combo
+
+    def __str__(self):
+        return f'Catepillar({",".join(str(c) for c in self.combo)})'
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class ScreenLoc:
