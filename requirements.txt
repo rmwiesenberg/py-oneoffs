@@ -5,3 +5,4 @@ pyautogui
 pynput
 tqdm
 sklearn
+matplotlib

@@ -6,6 +6,7 @@ import random
 import time
 from typing import List, Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -15,7 +16,7 @@ from torch.utils.data import DataLoader
 from common import DATA_DIR, Caterpillar, Color, TestScreen
 
 EPOCHS = 50
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 LEARN_RATE = 0.005
 
 
@@ -43,21 +44,13 @@ class NN(nn.Module):
 
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(p=0.1)
-        self.batchnorm1 = nn.BatchNorm1d(32)
-        self.batchnorm2 = nn.BatchNorm1d(32)
-        self.batchnorm3 = nn.BatchNorm1d(64)
-        self.batchnorm4 = nn.BatchNorm1d(64)
 
     def forward(self, inputs):
         x = self.relu(self.layer_1(inputs))
-        # x = self.batchnorm1(x)
         x = self.relu(self.layer_2(x))
-        # x = self.batchnorm2(x)
-        # x = self.dropout(x)
+        x = self.dropout(x)
         x = self.relu(self.layer_3(x))
-        # x = self.batchnorm3(x)
         x = self.relu(self.layer_4(x))
-        # x = self.batchnorm4(x)
         # x = self.dropout(x)
         x = self.layer_out(x)
 
@@ -111,6 +104,9 @@ def train(*, name: str, validation: float = 0.1):
 
     criterion = nn.BCEWithLogitsLoss()
     optimizer = Adam(net.parameters(), lr=LEARN_RATE)
+
+    losses = []
+    accuracies = []
     for epoch in range(EPOCHS):
         epoch_loss = 0
         epoch_acc = 0
@@ -129,9 +125,12 @@ def train(*, name: str, validation: float = 0.1):
             epoch_loss += loss.item()
             epoch_acc += acc.item()
 
+        losses.append(epoch_loss / len(train_loader))
+        accuracies.append(epoch_acc / len(train_loader))
+
         print(f'Epoch {epoch + 0:03}: '
-              f'| Loss: {epoch_loss / len(train_loader):.5f} '
-              f'| Acc: {epoch_acc / len(train_loader):.3f}')
+              f'| Loss: {losses[-1]:.5f} '
+              f'| Acc: {accuracies[-1]:.3f}')
 
     final_acc = 0
     with torch.set_grad_enabled(False):
@@ -142,6 +141,16 @@ def train(*, name: str, validation: float = 0.1):
             final_acc += acc.item()
         print(f'Validation Acc: {final_acc / len(valid_loader):.3f}')
     torch.save(net.state_dict(), os.path.join(DATA_DIR, f'{name}.torch'))
+
+    fig, (ax1, ax2) = plt.subplots(2, 1)
+    fig.set_size_inches(16, 9)
+    ax1.plot(losses)
+    ax1.set_title('Losses')
+    ax2.plot(accuracies)
+    ax2.set_title('Accuracies')
+    fig.savefig(os.path.join(DATA_DIR, f'{name}.png'))
+
+    plt.show()
 
 
 def test(*, name: str):
