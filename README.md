@@ -1,1 +1,1 @@
-# pytorch-oneoffs
+# py-oneoffs
